@@ -3,60 +3,215 @@ set -e
 
 IMAGE="c3po"
 
+# --- Container naming ---
+# Deterministic name from workspace path so exec/stop/status can find it.
+WORKSPACE="$(pwd)"
+WORKSPACE_HASH=$(printf '%s' "$WORKSPACE" | md5sum | cut -c1-8)
+WORKSPACE_NAME=$(basename "$WORKSPACE" | tr -c 'a-zA-Z0-9_.-' '-' | head -c 50)
+CONTAINER_NAME="c3po-${WORKSPACE_NAME}-${WORKSPACE_HASH}"
+
 # --- Help ---
-if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+show_help() {
     cat <<'EOF'
-Usage: c3po [options] [claude args...]
+Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
+       c3po exec [cmd...]               Run a command in the running container (default: bash)
+       c3po attach [claude args...]     Start a new Claude session in existing container
+       c3po stop                        Stop and remove the container
+       c3po status                      Show running c3po containers
 
-Run Claude Code in a containerized Arch Linux environment.
-
-Options:
-  --help, -h    Show this help message
-  --shell       Start a bash shell instead of Claude Code
+Flags:
+  --help, -h      Show this help message
+  --shell         Start a bash shell instead of Claude (ephemeral)
+  --ephemeral     Old behavior: container removed when Claude exits
+  --safely-require-permissions   Require Claude permission prompts (default: skip)
 
 Examples:
-  c3po                          Interactive Claude Code session
-  c3po -p "fix the bug"         Run with a prompt
-  c3po --resume                 Resume last conversation
-  c3po --shell                  Drop into container shell
+  c3po                              Start Claude, container persists after exit
+  c3po -p "fix the bug"            Run with a prompt
+  c3po --ephemeral                  One-shot, container removed on exit
+  c3po exec                        Bash shell in the running container
+  c3po exec nvim .                  Open neovim in the running container
+  c3po attach                      New Claude session in existing container
+  c3po --safely-require-permissions  Run Claude with permission prompts enabled
+  c3po attach --safely-require-permissions  Attach with permission prompts
+  c3po stop                        Tear down the container
+  c3po status                      List all c3po containers
 
 Environment variables:
-  ANTHROPIC_API_KEY             API key (forwarded to container)
-  CLAUDE_CODE_OAUTH_TOKEN       OAuth token (forwarded to container)
+  ANTHROPIC_API_KEY                 API key (forwarded to container)
+  CLAUDE_CODE_OAUTH_TOKEN           OAuth token (forwarded to container)
 EOF
-    exit 0
-fi
+}
 
-# --- Shell mode ---
-ENTRYPOINT_OVERRIDE=()
-COMMAND=()
-if [ "$1" = "--shell" ]; then
-    ENTRYPOINT_OVERRIDE=(--entrypoint /bin/bash)
-    shift
-    COMMAND=("$@")
-else
-    COMMAND=("$@")
-fi
+# --- Subcommands ---
 
-# --- Ensure host ~/.claude exists ---
-mkdir -p "$HOME/.claude"
+cmd_exec() {
+    if ! docker container inspect "$CONTAINER_NAME" &>/dev/null; then
+        echo "No container found for this workspace." >&2
+        echo "Start one with: c3po" >&2
+        exit 1
+    fi
+    if [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" != "true" ]; then
+        echo "Container exists but is not running." >&2
+        echo "Remove it with: c3po stop" >&2
+        exit 1
+    fi
+    if [ $# -eq 0 ]; then
+        set -- bash
+    fi
+    exec docker exec -it -w /workspace "$CONTAINER_NAME" "$@"
+}
 
-# --- Environment passthrough ---
-ENV_ARGS=()
-[ -n "$ANTHROPIC_API_KEY" ] && ENV_ARGS+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
-[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ENV_ARGS+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN")
+cmd_attach() {
+    if ! docker container inspect "$CONTAINER_NAME" &>/dev/null; then
+        echo "No container found for this workspace." >&2
+        echo "Start one with: c3po" >&2
+        exit 1
+    fi
+    if [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" != "true" ]; then
+        echo "Container exists but is not running." >&2
+        echo "Remove it with: c3po stop" >&2
+        exit 1
+    fi
+    local skip_permissions=1
+    local args=()
+    for arg in "$@"; do
+        if [ "$arg" = "--safely-require-permissions" ]; then
+            skip_permissions=0
+        else
+            args+=("$arg")
+        fi
+    done
+    local claude_args=()
+    if [ "$skip_permissions" = 1 ]; then
+        claude_args+=(--dangerously-skip-permissions)
+    fi
+    claude_args+=("${args[@]}")
+    exec docker exec -it -w /workspace "$CONTAINER_NAME" claude "${claude_args[@]}"
+}
 
-# --- Run ---
-exec docker run \
-    --rm -it --init \
-    --hostname c3po \
-    -v "$(pwd):/workspace:rw" \
-    -v "$HOME/.claude:/home/claude/.claude:rw" \
-    --cap-drop=ALL \
-    --security-opt=no-new-privileges:true \
-    --pids-limit=500 \
-    --network=bridge \
-    "${ENV_ARGS[@]}" \
-    "${ENTRYPOINT_OVERRIDE[@]}" \
-    "$IMAGE" \
-    "${COMMAND[@]}"
+cmd_stop() {
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm "$CONTAINER_NAME" 2>/dev/null || true
+    echo "Stopped: $CONTAINER_NAME"
+}
+
+cmd_status() {
+    docker ps -a --filter "name=c3po-" --format "table {{.Names}}\t{{.Status}}\t{{.RunningFor}}"
+}
+
+cmd_run() {
+    local ephemeral=0
+    local shell_mode=0
+    local permissions=0
+    local args=()
+
+    # Parse flags
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --ephemeral)
+                ephemeral=1
+                shift
+                ;;
+            --shell)
+                shell_mode=1
+                shift
+                ;;
+            --safely-require-permissions)
+                permissions=1
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Shell mode is always ephemeral
+    if [ "$shell_mode" = 1 ]; then
+        ephemeral=1
+    fi
+
+    # Check for existing container
+    if docker container inspect "$CONTAINER_NAME" &>/dev/null; then
+        if [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
+            echo "Container already running for this workspace: $CONTAINER_NAME" >&2
+            echo "" >&2
+            echo "  c3po exec        Open a shell in the container" >&2
+            echo "  c3po attach      Start a new Claude session" >&2
+            echo "  c3po stop        Stop and remove the container" >&2
+            exit 1
+        else
+            # Stopped container — remove it before starting fresh
+            docker rm "$CONTAINER_NAME" &>/dev/null || true
+        fi
+    fi
+
+    # Ensure host ~/.claude exists
+    mkdir -p "$HOME/.claude"
+
+    # Environment passthrough
+    local env_args=()
+    [ -n "$ANTHROPIC_API_KEY" ] && env_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+    [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && env_args+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN")
+
+    # Build docker run arguments
+    local run_args=(
+        -it --init
+        --hostname c3po
+        --name "$CONTAINER_NAME"
+        -v "$(pwd):/workspace:rw"
+        -v "$HOME/.claude:/home/claude/.claude:rw"
+        --cap-drop=ALL
+        --security-opt=no-new-privileges:true
+        --pids-limit=1024
+        --network=bridge
+    )
+
+    if [ "$ephemeral" = 1 ]; then
+        run_args+=(--rm)
+    else
+        run_args+=(-e C3PO_PERSIST=1)
+    fi
+
+    if [ "$permissions" = 1 ]; then
+        run_args+=(-e C3PO_PERMISSIONS=1)
+    fi
+
+    run_args+=("${env_args[@]}")
+
+    if [ "$shell_mode" = 1 ]; then
+        run_args+=(--entrypoint /bin/bash)
+    fi
+
+    run_args+=("$IMAGE")
+    run_args+=("${args[@]}")
+
+    exec docker run "${run_args[@]}"
+}
+
+# --- Dispatch ---
+case "${1:-}" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    exec)
+        shift
+        cmd_exec "$@"
+        ;;
+    attach)
+        shift
+        cmd_attach "$@"
+        ;;
+    stop)
+        cmd_stop
+        ;;
+    status)
+        cmd_status
+        ;;
+    *)
+        cmd_run "$@"
+        ;;
+esac

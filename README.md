@@ -46,8 +46,10 @@ export PATH="$PATH:/path/to/c3po"
 
 ## Usage
 
+### Starting a Session
+
 ```bash
-# Interactive session in current directory
+# Interactive session — container persists after Claude exits
 c3po
 
 # Pass a prompt directly
@@ -56,11 +58,50 @@ c3po -p "refactor the auth module to use JWT"
 # Resume last conversation
 c3po --resume
 
-# Drop into a shell for debugging
-c3po --shell
-
 # Pass any Claude Code flags
 c3po --model sonnet --verbose
+```
+
+### Working with a Running Container
+
+After Claude exits (or while it's running), the container stays alive. Use your host tmux to open additional panes:
+
+```bash
+# Open a shell in the running container
+c3po exec
+
+# Run a specific command
+c3po exec nvim .
+c3po exec cargo test
+c3po exec git log --oneline
+
+# Start a new Claude session in the same container
+c3po attach
+
+# Start Claude with flags
+c3po attach --resume
+```
+
+### Lifecycle Management
+
+```bash
+# See all c3po containers
+c3po status
+
+# Stop and remove the container for this workspace
+c3po stop
+```
+
+### Ephemeral Mode
+
+For one-shot tasks where you don't need the container to persist:
+
+```bash
+# Container removed when Claude exits (old behavior)
+c3po --ephemeral
+
+# Shell mode is always ephemeral
+c3po --shell
 ```
 
 ### Environment Variables
@@ -71,6 +112,25 @@ c3po --model sonnet --verbose
 | `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token — forwarded to container if set |
 
 If neither is set, the container uses tokens from `~/.claude` (mounted from host).
+
+## Persist-Mode Workflow
+
+The default workflow uses your **host tmux** as the multiplexer:
+
+```
+tmux pane 1              tmux pane 2              tmux pane 3
+─────────────            ─────────────            ─────────────
+$ c3po                   $ c3po exec              $ c3po exec nvim .
+  → Claude session         → bash inside             → neovim inside
+  → exits, container        same container            same container
+    keeps running
+```
+
+1. `c3po` starts Claude in a named container. When Claude exits, the container stays alive.
+2. From other tmux panes, `c3po exec` drops into a shell and `c3po attach` starts a new Claude session — all sharing the same container, filesystem, and installed packages.
+3. `c3po stop` tears everything down when you're done.
+
+Each workspace gets its own container (named by directory), so you can run multiple projects simultaneously.
 
 ## Configuration
 
@@ -118,8 +178,12 @@ $(pwd)/         ──── rw ────►     /workspace/
 $ANTHROPIC_API_KEY ── env ──►     $ANTHROPIC_API_KEY
 
                                   entrypoint.sh
-                                    └─► exec claude --dangerously-skip-permissions
-                                         (PID 1 via --init/tini)
+                                    ├─ persist mode (default):
+                                    │    claude --dangerously-skip-permissions
+                                    │    └─► sleep infinity (keeps container alive)
+                                    └─ ephemeral mode (--ephemeral):
+                                         exec claude --dangerously-skip-permissions
+                                         (PID 1 via --init/tini, container dies on exit)
 ```
 
 ### Container Details
@@ -128,6 +192,7 @@ $ANTHROPIC_API_KEY ── env ──►     $ANTHROPIC_API_KEY
 - **User**: `claude` (UID 1000) — matches typical host user for clean volume permissions
 - **Workspace**: `/workspace` — your project files, mounted read-write
 - **Init**: Docker `--init` flag provides tini for proper signal handling
+- **Naming**: `c3po-<dirname>-<hash>` — deterministic per workspace directory
 
 ## Security
 
@@ -135,7 +200,7 @@ The container runs with reasonable hardening for a dev environment:
 
 - `--cap-drop=ALL` — no Linux capabilities
 - `--security-opt=no-new-privileges:true` — no privilege escalation
-- `--pids-limit=500` — process limit (generous for dev work)
+- `--pids-limit=1024` — process limit (generous for concurrent Claude + editor + shells)
 - Non-root user inside container
 - `--dangerously-skip-permissions` is scoped to the container only
 
