@@ -9,21 +9,16 @@ if [ ! -f /workspace/.claude/settings.local.json ]; then
     cp /home/claude/.config/c3po/settings.local.json /workspace/.claude/settings.local.json
 fi
 
-# Build claude args
-CLAUDE_ARGS=()
-if [ "${C3PO_PERMISSIONS:-0}" != "1" ]; then
-    CLAUDE_ARGS+=(--dangerously-skip-permissions)
-fi
-CLAUDE_ARGS+=("$@")
-
 if [ "${C3PO_PERSIST:-0}" = "1" ]; then
-    # Run Claude in foreground (not exec) so entrypoint survives Claude exit
-    claude "${CLAUDE_ARGS[@]}" || true
-    echo "[c3po] Claude exited. Container persisting."
-    echo "[c3po] Use 'c3po exec' for shell, 'c3po attach' for Claude, 'c3po stop' to terminate."
-    # Keep container alive for docker exec sessions
+    # Persist mode: keep container alive for docker exec sessions.
+    # Claude is launched from the host via 'docker exec'.
     exec sleep infinity
 else
     # Ephemeral mode: Claude is PID 1, container dies with it
+    CLAUDE_ARGS=()
+    if [ "${C3PO_PERMISSIONS:-0}" != "1" ]; then
+        CLAUDE_ARGS+=(--dangerously-skip-permissions)
+    fi
+    CLAUDE_ARGS+=("$@")
     exec claude "${CLAUDE_ARGS[@]}"
 fi

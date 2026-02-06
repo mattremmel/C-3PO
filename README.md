@@ -177,13 +177,14 @@ $(pwd)/         ──── rw ────►     /workspace/
 ~/.claude/      ──── rw ────►     /home/claude/.claude/
 $ANTHROPIC_API_KEY ── env ──►     $ANTHROPIC_API_KEY
 
-                                  entrypoint.sh
-                                    ├─ persist mode (default):
-                                    │    claude --dangerously-skip-permissions
-                                    │    └─► sleep infinity (keeps container alive)
-                                    └─ ephemeral mode (--ephemeral):
-                                         exec claude --dangerously-skip-permissions
-                                         (PID 1 via --init/tini, container dies on exit)
+                                  persist mode (default):
+                                    host: docker run -d → entrypoint setup → sleep infinity
+                                    host: docker exec -it → claude session
+                                    Claude exits → user returns to host shell
+                                    Container keeps running (sleep infinity)
+                                  ephemeral mode (--ephemeral):
+                                    exec claude --dangerously-skip-permissions
+                                    (PID 1 via --init/tini, container dies on exit)
 ```
 
 ### Container Details

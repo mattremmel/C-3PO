@@ -158,7 +158,7 @@ cmd_run() {
 
     # Build docker run arguments
     local run_args=(
-        -it --init
+        --init
         --hostname c3po
         --name "$CONTAINER_NAME"
         -v "$(pwd):/workspace:rw"
@@ -170,25 +170,65 @@ cmd_run() {
     )
 
     if [ "$ephemeral" = 1 ]; then
-        run_args+=(--rm)
-    else
-        run_args+=(-e C3PO_PERSIST=1)
+        run_args+=(-it --rm)
+
+        if [ "$permissions" = 1 ]; then
+            run_args+=(-e C3PO_PERMISSIONS=1)
+        fi
+
+        run_args+=("${env_args[@]}")
+
+        if [ "$shell_mode" = 1 ]; then
+            run_args+=(--entrypoint /bin/bash)
+        fi
+
+        run_args+=("$IMAGE")
+        run_args+=("${args[@]}")
+
+        exec docker run "${run_args[@]}"
     fi
+
+    # --- Persist mode: start detached, launch Claude via docker exec ---
+    run_args+=(-d -e C3PO_PERSIST=1)
 
     if [ "$permissions" = 1 ]; then
         run_args+=(-e C3PO_PERMISSIONS=1)
     fi
 
     run_args+=("${env_args[@]}")
-
-    if [ "$shell_mode" = 1 ]; then
-        run_args+=(--entrypoint /bin/bash)
-    fi
-
     run_args+=("$IMAGE")
-    run_args+=("${args[@]}")
 
-    exec docker run "${run_args[@]}"
+    docker run "${run_args[@]}" >/dev/null
+
+    # Wait for container to be running (poll, max ~5s)
+    local retries=0
+    while [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" != "true" ]; do
+        retries=$((retries + 1))
+        if [ "$retries" -gt 50 ]; then
+            echo "Container failed to start." >&2
+            docker logs "$CONTAINER_NAME" 2>&1 >&2 || true
+            docker rm "$CONTAINER_NAME" &>/dev/null || true
+            exit 1
+        fi
+        sleep 0.1
+    done
+
+    # Build claude args and launch via docker exec
+    local claude_args=()
+    [ "$permissions" != 1 ] && claude_args+=(--dangerously-skip-permissions)
+    claude_args+=("${args[@]}")
+
+    docker exec -it -w /workspace "$CONTAINER_NAME" claude "${claude_args[@]}" || true
+
+    # User is back at host shell — print persist info
+    if [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
+        echo ""
+        echo "[c3po] Claude exited. Container persisting."
+        echo "[c3po] Use 'c3po exec' for shell, 'c3po attach' for Claude, 'c3po stop' to terminate."
+    else
+        echo ""
+        echo "[c3po] Container stopped."
+    fi
 }
 
 # --- Dispatch ---
