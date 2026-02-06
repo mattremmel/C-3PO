@@ -1,6 +1,7 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
+VERSION="0.1.0"
 IMAGE="c3po"
 
 # --- Container naming ---
@@ -18,18 +19,28 @@ Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
        c3po attach [claude args...]     Resume Claude session in existing container
        c3po stop                        Stop and remove the container
        c3po status                      Show running c3po containers
+       c3po logs [flags]                Show container logs
+       c3po build [flags]               Build the c3po Docker image
 
 Flags:
   --help, -h      Show this help message
+  --version       Show version
   --shell         Start a bash shell instead of Claude (ephemeral)
   --ephemeral     Old behavior: container removed when Claude exits
   --no-resume     (attach) Start a fresh session instead of resuming
+  --image <name>  Use a custom Docker image (default: c3po)
+  -v, --volume <spec>  Additional volume mount (repeatable)
   --safely-require-permissions   Require Claude permission prompts (default: skip)
+  --              Pass remaining args directly to docker run
 
 Examples:
   c3po                              Start Claude, container persists after exit
   c3po -p "fix the bug"            Run with a prompt
   c3po --ephemeral                  One-shot, container removed on exit
+  c3po --image my-c3po              Use a custom image
+  c3po -v /data:/data               Mount an additional volume
+  c3po -- --memory=4g --cpus=2      Pass flags to docker run
+  c3po -p "fix bug" -- --memory=4g  Combine c3po and docker flags
   c3po exec                        Bash shell in the running container
   c3po exec nvim .                  Open neovim in the running container
   c3po attach                      Resume last Claude session in container
@@ -39,6 +50,8 @@ Examples:
   c3po attach --safely-require-permissions  Attach with permission prompts
   c3po stop                        Tear down the container
   c3po status                      List all c3po containers
+  c3po logs --follow                Follow container logs
+  c3po build --no-cache             Rebuild image without cache
 
 Environment variables:
   ANTHROPIC_API_KEY                 API key (forwarded to container)
@@ -109,19 +122,42 @@ cmd_attach() {
 }
 
 cmd_stop() {
+    if ! docker container inspect "$CONTAINER_NAME" &>/dev/null; then
+        echo "No container found for this workspace."
+        return
+    fi
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
     echo "Stopped: $CONTAINER_NAME"
 }
 
 cmd_status() {
-    docker ps -a --filter "name=c3po-" --format "table {{.Names}}\t{{.Status}}\t{{.RunningFor}}"
+    docker ps -a --filter "name=^c3po-" --format "table {{.Names}}\t{{.Status}}\t{{.RunningFor}}"
+}
+
+cmd_logs() {
+    docker logs "$@" "$CONTAINER_NAME"
+}
+
+cmd_build() {
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    docker build "$@" -t "$IMAGE" "$script_dir"
 }
 
 cmd_run() {
+    # Pre-flight: check docker is available
+    if ! command -v docker &>/dev/null; then
+        echo "Error: docker not found. Install Docker or set CONTAINER_RUNTIME." >&2
+        exit 1
+    fi
+
     local ephemeral=0
     local shell_mode=0
     local permissions=0
+    local image_override=""
+    local extra_volumes=()
+    local docker_args=()
     local args=()
 
     # Parse flags
@@ -139,12 +175,36 @@ cmd_run() {
                 permissions=1
                 shift
                 ;;
+            --image)
+                image_override="$2"
+                shift 2
+                ;;
+            -v|--volume)
+                extra_volumes+=("$2")
+                shift 2
+                ;;
+            --)
+                shift
+                docker_args+=("$@")
+                break
+                ;;
             *)
                 args+=("$1")
                 shift
                 ;;
         esac
     done
+
+    # Apply image override
+    if [ -n "$image_override" ]; then
+        IMAGE="$image_override"
+    fi
+
+    # Pre-flight: check image exists
+    if ! docker image inspect "$IMAGE" &>/dev/null; then
+        echo "Image '$IMAGE' not found. Build it with: c3po build" >&2
+        exit 1
+    fi
 
     # Shell mode is always ephemeral
     if [ "$shell_mode" = 1 ]; then
@@ -186,6 +246,19 @@ cmd_run() {
         --pids-limit=1024
         --network=bridge
     )
+
+    # Git config + credentials (read-only)
+    [ -f "$HOME/.gitconfig" ] && run_args+=(-v "$HOME/.gitconfig:/home/claude/.gitconfig:ro")
+    [ -f "$HOME/.config/git/config" ] && run_args+=(-v "$HOME/.config/git/config:/home/claude/.config/git/config:ro")
+    [ -f "$HOME/.git-credentials" ] && run_args+=(-v "$HOME/.git-credentials:/home/claude/.git-credentials:ro")
+
+    # Extra volume mounts
+    for vol in "${extra_volumes[@]}"; do
+        run_args+=(-v "$vol")
+    done
+
+    # Docker passthrough args
+    run_args+=("${docker_args[@]}")
 
     if [ "$ephemeral" = 1 ]; then
         run_args+=(-it --rm)
@@ -255,6 +328,10 @@ case "${1:-}" in
         show_help
         exit 0
         ;;
+    --version)
+        echo "c3po $VERSION"
+        exit 0
+        ;;
     exec)
         shift
         cmd_exec "$@"
@@ -268,6 +345,14 @@ case "${1:-}" in
         ;;
     status)
         cmd_status
+        ;;
+    logs)
+        shift
+        cmd_logs "$@"
+        ;;
+    build)
+        shift
+        cmd_build "$@"
         ;;
     *)
         cmd_run "$@"

@@ -29,8 +29,8 @@ c3po
 Clone the repo and build:
 
 ```bash
-git clone https://github.com/you/c3po.git
-cd c3po
+git clone https://github.com/mattremmel/C-3PO.git
+cd C-3PO
 ./build.sh
 ```
 
@@ -93,6 +93,23 @@ c3po status
 
 # Stop and remove the container for this workspace
 c3po stop
+
+# View container logs
+c3po logs
+c3po logs --follow
+```
+
+### Image and Build
+
+```bash
+# Build the c3po image
+c3po build
+
+# Rebuild without cache
+c3po build --no-cache
+
+# Use a custom image
+c3po --image my-custom-c3po
 ```
 
 ### Ephemeral Mode
@@ -105,6 +122,20 @@ c3po --ephemeral
 
 # Shell mode is always ephemeral
 c3po --shell
+```
+
+### Additional Volumes and Docker Flags
+
+```bash
+# Mount extra volumes
+c3po -v /data:/data
+c3po --volume ~/.ssh:/home/claude/.ssh:ro
+
+# Pass flags directly to docker run (after --)
+c3po -- --memory=4g --cpus=2
+
+# Combine c3po flags and docker flags
+c3po -p "fix bug" -- --memory=4g
 ```
 
 ### Environment Variables
@@ -144,7 +175,6 @@ Each workspace gets its own container (named by directory), so you can run multi
 | `config/claude-config.json` | `~/.claude.json` | Onboarding, auto-updates, project trust |
 | `config/settings.json` | `~/.claude/settings.json` | Tool permissions, editor config |
 | `config/settings.local.json` | `/workspace/.claude/settings.local.json` | Project-level settings (copied if absent) |
-| `config/nvim/init.lua` | `~/.config/nvim/init.lua` | Neovim baseline config |
 
 ### Host Mount Overlay
 
@@ -178,6 +208,8 @@ Host                              Container
 ─────────────────────────         ─────────────────────────
 $(pwd)/         ──── rw ────►     /workspace/
 ~/.claude/      ──── rw ────►     /home/claude/.claude/
+~/.gitconfig    ──── ro ────►     /home/claude/.gitconfig
+~/.git-credentials ── ro ──►     /home/claude/.git-credentials
 $ANTHROPIC_API_KEY ── env ──►     $ANTHROPIC_API_KEY
 
                                   persist mode (default):
@@ -223,6 +255,40 @@ This is a **development tool**, not a security sandbox. The workspace mount is r
 docker build --build-arg USER_ID=$(id -u) -t c3po .
 ```
 
+## Troubleshooting
+
+### Docker not installed or not running
+
+```
+Error: docker not found. Install Docker or set CONTAINER_RUNTIME.
+```
+
+Install Docker Engine or Docker Desktop. Ensure the Docker daemon is running (`systemctl start docker` or start Docker Desktop).
+
+### UID mismatch (permission errors on mounted files)
+
+The container user `claude` has UID 1000 by default. If your host UID differs, rebuild with:
+
+```bash
+docker build --build-arg USER_ID=$(id -u) -t c3po .
+```
+
+### Image not built yet
+
+```
+Image 'c3po' not found. Build it with: c3po build
+```
+
+Run `c3po build` or `./build.sh` to build the image.
+
+### Container name conflicts
+
+If a stale container from a previous session blocks startup, remove it:
+
+```bash
+c3po stop
+```
+
 ## Future Enhancements
 
 ### Network Restriction via Forward Proxy
@@ -232,3 +298,23 @@ Running with `--dangerously-skip-permissions` means Claude can make arbitrary ou
 The solution is a sidecar [tinyproxy](https://tinyproxy.github.io/) container that acts as a forward proxy with a domain whitelist. A `--restricted` flag on `c3po` would spin up the proxy alongside the main container, configure the container's network to route all HTTP/HTTPS traffic through it, and only allow connections to known-good domains (e.g. `api.anthropic.com`, `github.com`, `registry.npmjs.org`). All other outbound traffic would be blocked.
 
 This gives you the convenience of `--dangerously-skip-permissions` with a meaningful safety net against unintended or malicious network activity.
+
+### SSH Agent Forwarding
+
+Mount the host's `SSH_AUTH_SOCK` into the container so SSH-based git remotes work without copying keys:
+
+```bash
+c3po -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock" -- -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+```
+
+A dedicated `--ssh` flag could automate this.
+
+### GPG Agent Forwarding
+
+Mount `~/.gnupg` into the container for commit signing:
+
+```bash
+c3po -v "$HOME/.gnupg:/home/claude/.gnupg:ro"
+```
+
+A dedicated `--gpg` flag could automate socket forwarding and key trust setup.

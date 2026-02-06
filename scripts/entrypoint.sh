@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Ensure workspace .claude directory exists
 mkdir -p /workspace/.claude

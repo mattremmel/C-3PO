@@ -95,7 +95,8 @@ RUN nvim --headless "+TSUpdateSync" +qa
 # FIXME: Mason tools install successfully but nvim exits with code 1.
 # The MasonToolsInstallComplete event may fire before all async installs finish,
 # or one of the tools emits a non-zero exit. Needs root-cause investigation.
-RUN nvim --headless -c "autocmd User MasonToolsInstallComplete qall" -c "MasonInstallAll" || true
+RUN nvim --headless -c "autocmd User MasonToolsInstallComplete qall" -c "MasonInstallAll" \
+    || echo "WARNING: Mason tools install exited non-zero (known issue, tools may still be installed)"
 USER root
 
 # -----------------------------------------------------------------------------
