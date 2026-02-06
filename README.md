@@ -94,6 +94,9 @@ c3po status
 # Stop and remove the container for this workspace
 c3po stop
 
+# Restart with a fresh container
+c3po restart
+
 # View container logs
 c3po logs
 c3po logs --follow

@@ -226,6 +226,7 @@ cmd_run() {
             echo "  c3po exec        Open a shell in the container" >&2
             echo "  c3po attach      Start a new Claude session" >&2
             echo "  c3po stop        Stop and remove the container" >&2
+            echo "  c3po restart     Restart with a fresh container" >&2
             exit 1
         else
             # Stopped container — remove it before starting fresh
