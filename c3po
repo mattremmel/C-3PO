@@ -236,6 +236,13 @@ cmd_run() {
     # Ensure host ~/.claude exists
     mkdir -p "$HOME/.claude"
 
+    # Compute the host project key so Claude's project data inside the
+    # container (-workspace) maps to the correct host-path-based directory.
+    # Claude Code encodes project paths as: /foo/bar → -foo-bar
+    local host_project_key
+    host_project_key=$(printf '%s' "$(pwd)" | tr '/' '-')
+    mkdir -p "$HOME/.claude/projects/$host_project_key"
+
     # Environment passthrough
     local env_args=()
     [ -n "$ANTHROPIC_API_KEY" ] && env_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
@@ -248,6 +255,7 @@ cmd_run() {
         --name "$CONTAINER_NAME"
         -v "$(pwd):/workspace:rw"
         -v "$HOME/.claude:/home/claude/.claude:rw"
+        -v "$HOME/.claude/projects/$host_project_key:/home/claude/.claude/projects/-workspace:rw"
         --cap-drop=ALL
         --security-opt=no-new-privileges:true
         --pids-limit=1024
