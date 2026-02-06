@@ -63,13 +63,17 @@ USER root
 RUN sed -i "/${USER_NAME} ALL=(ALL) NOPASSWD: ALL/d" /etc/sudoers
 
 # -----------------------------------------------------------------------------
-# Node.js + Claude Code
+# Node.js
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed nodejs npm \
     && pacman -Scc --noconfirm
 
-RUN npm install -g @anthropic-ai/claude-code \
-    && npm cache clean --force
+# -----------------------------------------------------------------------------
+# Claude Code (native binary)
+# -----------------------------------------------------------------------------
+USER ${USER_NAME}
+RUN curl -fsSL https://claude.ai/install.sh | bash
+USER root
 
 # -----------------------------------------------------------------------------
 # Neovim
@@ -151,7 +155,7 @@ RUN chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}
 USER ${USER_NAME}
 WORKDIR /workspace
 
-ENV PATH="/home/${USER_NAME}/.cargo/bin:/home/${USER_NAME}/go/bin:${PATH}"
+ENV PATH="/home/${USER_NAME}/.local/bin:/home/${USER_NAME}/.cargo/bin:/home/${USER_NAME}/go/bin:${PATH}"
 ENV EDITOR=nvim
 ENV VISUAL=nvim
 
