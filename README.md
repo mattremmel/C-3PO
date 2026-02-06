@@ -55,7 +55,7 @@ c3po
 # Pass a prompt directly
 c3po -p "refactor the auth module to use JWT"
 
-# Resume last conversation
+# Resume last conversation (note: for initial c3po run, not attach)
 c3po --resume
 
 # Pass any Claude Code flags
@@ -75,10 +75,13 @@ c3po exec nvim .
 c3po exec cargo test
 c3po exec git log --oneline
 
-# Start a new Claude session in the same container
+# Resume the last Claude session (default)
 c3po attach
 
-# Start Claude with flags
+# Start a fresh session instead of resuming
+c3po attach --no-resume
+
+# Interactive session picker
 c3po attach --resume
 ```
 
@@ -127,7 +130,7 @@ $ c3po                   $ c3po exec              $ c3po exec nvim .
 ```
 
 1. `c3po` starts Claude in a named container. When Claude exits, the container stays alive.
-2. From other tmux panes, `c3po exec` drops into a shell and `c3po attach` starts a new Claude session — all sharing the same container, filesystem, and installed packages.
+2. From other tmux panes, `c3po exec` drops into a shell and `c3po attach` resumes the last Claude session — all sharing the same container, filesystem, and installed packages.
 3. `c3po stop` tears everything down when you're done.
 
 Each workspace gets its own container (named by directory), so you can run multiple projects simultaneously.

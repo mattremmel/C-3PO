@@ -15,7 +15,7 @@ show_help() {
     cat <<'EOF'
 Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
        c3po exec [cmd...]               Run a command in the running container (default: bash)
-       c3po attach [claude args...]     Start a new Claude session in existing container
+       c3po attach [claude args...]     Resume Claude session in existing container
        c3po stop                        Stop and remove the container
        c3po status                      Show running c3po containers
 
@@ -23,6 +23,7 @@ Flags:
   --help, -h      Show this help message
   --shell         Start a bash shell instead of Claude (ephemeral)
   --ephemeral     Old behavior: container removed when Claude exits
+  --no-resume     (attach) Start a fresh session instead of resuming
   --safely-require-permissions   Require Claude permission prompts (default: skip)
 
 Examples:
@@ -31,7 +32,9 @@ Examples:
   c3po --ephemeral                  One-shot, container removed on exit
   c3po exec                        Bash shell in the running container
   c3po exec nvim .                  Open neovim in the running container
-  c3po attach                      New Claude session in existing container
+  c3po attach                      Resume last Claude session in container
+  c3po attach --no-resume           Start a fresh session instead
+  c3po attach --resume              Interactive session picker
   c3po --safely-require-permissions  Run Claude with permission prompts enabled
   c3po attach --safely-require-permissions  Attach with permission prompts
   c3po stop                        Tear down the container
@@ -74,17 +77,32 @@ cmd_attach() {
         exit 1
     fi
     local skip_permissions=1
+    local auto_continue=1
+    local user_has_session_flag=0
     local args=()
     for arg in "$@"; do
-        if [ "$arg" = "--safely-require-permissions" ]; then
-            skip_permissions=0
-        else
-            args+=("$arg")
-        fi
+        case "$arg" in
+            --safely-require-permissions)
+                skip_permissions=0
+                ;;
+            --no-resume)
+                auto_continue=0
+                ;;
+            --continue|-c|--resume|-r)
+                user_has_session_flag=1
+                args+=("$arg")
+                ;;
+            *)
+                args+=("$arg")
+                ;;
+        esac
     done
     local claude_args=()
     if [ "$skip_permissions" = 1 ]; then
         claude_args+=(--dangerously-skip-permissions)
+    fi
+    if [ "$auto_continue" = 1 ] && [ "$user_has_session_flag" = 0 ]; then
+        claude_args+=(--continue)
     fi
     claude_args+=("${args[@]}")
     exec docker exec -it -w /workspace "$CONTAINER_NAME" claude "${claude_args[@]}"
