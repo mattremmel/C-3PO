@@ -1,0 +1,11 @@
+.git
+.gitignore
+.dockerignore
+.env
+.env.*
+README.md
+build.sh
+c3po
+LICENSE
+*.md
+*.tar

@@ -1,0 +1,11 @@
+{
+  "autoUpdates": false,
+  "hasCompletedOnboarding": true,
+  "autoTrustNewProjects": true,
+  "projects": {
+    "/workspace": {
+      "allowedTools": ["*"],
+      "hasTrustDialogAccepted": true
+    }
+  }
+}

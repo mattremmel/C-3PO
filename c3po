@@ -1,0 +1,62 @@
+#!/bin/bash
+set -e
+
+IMAGE="c3po"
+
+# --- Help ---
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    cat <<'EOF'
+Usage: c3po [options] [claude args...]
+
+Run Claude Code in a containerized Arch Linux environment.
+
+Options:
+  --help, -h    Show this help message
+  --shell       Start a bash shell instead of Claude Code
+
+Examples:
+  c3po                          Interactive Claude Code session
+  c3po -p "fix the bug"         Run with a prompt
+  c3po --resume                 Resume last conversation
+  c3po --shell                  Drop into container shell
+
+Environment variables:
+  ANTHROPIC_API_KEY             API key (forwarded to container)
+  CLAUDE_CODE_OAUTH_TOKEN       OAuth token (forwarded to container)
+EOF
+    exit 0
+fi
+
+# --- Shell mode ---
+ENTRYPOINT_OVERRIDE=()
+COMMAND=()
+if [ "$1" = "--shell" ]; then
+    ENTRYPOINT_OVERRIDE=(--entrypoint /bin/bash)
+    shift
+    COMMAND=("$@")
+else
+    COMMAND=("$@")
+fi
+
+# --- Ensure host ~/.claude exists ---
+mkdir -p "$HOME/.claude"
+
+# --- Environment passthrough ---
+ENV_ARGS=()
+[ -n "$ANTHROPIC_API_KEY" ] && ENV_ARGS+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ENV_ARGS+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN")
+
+# --- Run ---
+exec docker run \
+    --rm -it --init \
+    --hostname c3po \
+    -v "$(pwd):/workspace:rw" \
+    -v "$HOME/.claude:/home/claude/.claude:rw" \
+    --cap-drop=ALL \
+    --security-opt=no-new-privileges:true \
+    --pids-limit=500 \
+    --network=bridge \
+    "${ENV_ARGS[@]}" \
+    "${ENTRYPOINT_OVERRIDE[@]}" \
+    "$IMAGE" \
+    "${COMMAND[@]}"
