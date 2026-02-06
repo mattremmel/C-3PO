@@ -36,6 +36,20 @@ RUN pacman -S --noconfirm --needed \
     man-db \
     unzip \
     zip \
+    shellcheck \
+    tmux \
+    htop \
+    strace \
+    github-cli \
+    difftastic \
+    hyperfine \
+    tokei \
+    dust \
+    bottom \
+    hexyl \
+    xh \
+    watchexec \
+    docker \
     && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
@@ -119,7 +133,10 @@ RUN pacman -S --noconfirm --needed rustup sccache cargo-edit cargo-watch \
 
 USER ${USER_NAME}
 RUN rustup default stable \
-    && rustup toolchain install nightly --component rustfmt
+    && rustup toolchain install nightly --component rustfmt \
+    && mkdir -p /home/${USER_NAME}/.cargo \
+    && printf '[build]\nrustflags = ["-C", "link-arg=-fuse-ld=mold"]\n' \
+       > /home/${USER_NAME}/.cargo/config.toml
 USER root
 
 # -----------------------------------------------------------------------------
@@ -129,6 +146,33 @@ RUN pacman -S --noconfirm --needed go golangci-lint delve \
     && pacman -Scc --noconfirm
 
 ENV GOPATH="/home/${USER_NAME}/go"
+
+# -----------------------------------------------------------------------------
+# C/C++ & LLVM toolchain
+# -----------------------------------------------------------------------------
+RUN pacman -S --noconfirm --needed \
+    cmake \
+    clang \
+    llvm \
+    lldb \
+    lld \
+    gdb \
+    mold \
+    && pacman -Scc --noconfirm
+
+# Default to mold for C/C++ builds (cmake, autotools, meson all honor LDFLAGS)
+ENV LDFLAGS="-fuse-ld=mold"
+
+# -----------------------------------------------------------------------------
+# Build dependencies & database libraries
+# -----------------------------------------------------------------------------
+RUN pacman -S --noconfirm --needed \
+    openssl \
+    pkgconf \
+    sqlite \
+    postgresql-libs \
+    protobuf \
+    && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Claude config (defaults — host ~/.claude mount overlays at runtime)
