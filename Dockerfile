@@ -191,7 +191,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 RUN chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}
 
 USER ${USER_NAME}
-WORKDIR /workspace
+WORKDIR /home/claude
 
 ENV PATH="/home/${USER_NAME}/.local/bin:/home/${USER_NAME}/.cargo/bin:/home/${USER_NAME}/go/bin:${PATH}"
 ENV EDITOR=nvim

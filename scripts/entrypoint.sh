@@ -2,11 +2,11 @@
 set -eo pipefail
 
 # Ensure workspace .claude directory exists
-mkdir -p /workspace/.claude
+mkdir -p .claude
 
 # Copy default project settings if not already present
-if [ ! -f /workspace/.claude/settings.local.json ]; then
-    cp /home/claude/.config/c3po/settings.local.json /workspace/.claude/settings.local.json
+if [ ! -f .claude/settings.local.json ]; then
+    cp /home/claude/.config/c3po/settings.local.json .claude/settings.local.json
 fi
 
 if [ "${C3PO_PERSIST:-0}" = "1" ]; then

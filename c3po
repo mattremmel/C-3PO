@@ -77,7 +77,7 @@ cmd_exec() {
     if [ $# -eq 0 ]; then
         set -- bash
     fi
-    exec docker exec -it -w /workspace "$CONTAINER_NAME" "$@"
+    exec docker exec -it -w "$WORKSPACE" "$CONTAINER_NAME" "$@"
 }
 
 cmd_attach() {
@@ -120,7 +120,7 @@ cmd_attach() {
         claude_args+=(--continue)
     fi
     claude_args+=("${args[@]}")
-    exec docker exec -it -w /workspace "$CONTAINER_NAME" claude "${claude_args[@]}"
+    exec docker exec -it -w "$WORKSPACE" "$CONTAINER_NAME" claude "${claude_args[@]}"
 }
 
 cmd_stop() {
@@ -236,13 +236,6 @@ cmd_run() {
     # Ensure host ~/.claude exists
     mkdir -p "$HOME/.claude"
 
-    # Compute the host project key so Claude's project data inside the
-    # container (-workspace) maps to the correct host-path-based directory.
-    # Claude Code encodes project paths as: /foo/bar → -foo-bar
-    local host_project_key
-    host_project_key=$(printf '%s' "$(pwd)" | tr '/' '-')
-    mkdir -p "$HOME/.claude/projects/$host_project_key"
-
     # Environment passthrough
     local env_args=()
     [ -n "$ANTHROPIC_API_KEY" ] && env_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
@@ -253,9 +246,9 @@ cmd_run() {
         --init
         --hostname c3po
         --name "$CONTAINER_NAME"
-        -v "$(pwd):/workspace:rw"
+        -v "$(pwd):$(pwd):rw"
+        -w "$(pwd)"
         -v "$HOME/.claude:/home/claude/.claude:rw"
-        -v "$HOME/.claude/projects/$host_project_key:/home/claude/.claude/projects/-workspace:rw"
         --cap-drop=ALL
         --security-opt=no-new-privileges:true
         --pids-limit=1024
@@ -324,7 +317,7 @@ cmd_run() {
     [ "$permissions" != 1 ] && claude_args+=(--dangerously-skip-permissions)
     claude_args+=("${args[@]}")
 
-    docker exec -it -w /workspace "$CONTAINER_NAME" claude "${claude_args[@]}" || true
+    docker exec -it -w "$WORKSPACE" "$CONTAINER_NAME" claude "${claude_args[@]}" || true
 
     # User is back at host shell — print persist info
     if [ "$(docker container inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
