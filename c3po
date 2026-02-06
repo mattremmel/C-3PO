@@ -21,6 +21,7 @@ Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
        c3po status                      Show running c3po containers
        c3po logs [flags]                Show container logs
        c3po build [flags]               Build the c3po Docker image
+       c3po restart [flags]             Stop container and start fresh
 
 Flags:
   --help, -h      Show this help message
@@ -51,6 +52,7 @@ Examples:
   c3po stop                        Tear down the container
   c3po status                      List all c3po containers
   c3po logs --follow                Follow container logs
+  c3po restart                      Restart with a fresh container
   c3po build --no-cache             Rebuild image without cache
 
 Environment variables:
@@ -141,8 +143,13 @@ cmd_logs() {
 
 cmd_build() {
     local script_dir
-    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    script_dir="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
     docker build "$@" -t "$IMAGE" "$script_dir"
+}
+
+cmd_restart() {
+    cmd_stop
+    cmd_run "$@"
 }
 
 cmd_run() {
@@ -353,6 +360,10 @@ case "${1:-}" in
     build)
         shift
         cmd_build "$@"
+        ;;
+    restart)
+        shift
+        cmd_restart "$@"
         ;;
     *)
         cmd_run "$@"
