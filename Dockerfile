@@ -27,6 +27,10 @@ RUN pacman -S --noconfirm --needed \
     jq \
     ripgrep \
     fd \
+    bat \
+    just \
+    procs \
+    lazygit \
     tree \
     less \
     man-db \
@@ -38,6 +42,25 @@ RUN pacman -S --noconfirm --needed \
 # Non-root user
 # -----------------------------------------------------------------------------
 RUN useradd -m -s /bin/bash -u ${USER_ID} ${USER_NAME}
+
+# -----------------------------------------------------------------------------
+# yay (AUR helper) + AUR packages
+# -----------------------------------------------------------------------------
+# makepkg cannot run as root, so build yay as the target user.
+# Grant passwordless sudo temporarily for the install step.
+RUN echo "${USER_NAME} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER ${USER_NAME}
+RUN git clone --depth=1 https://aur.archlinux.org/yay-bin.git /tmp/yay-bin \
+    && cd /tmp/yay-bin \
+    && makepkg -si --noconfirm \
+    && rm -rf /tmp/yay-bin
+
+RUN yay -S --noconfirm beads-bin \
+    && yay -Scc --noconfirm
+USER root
+
+RUN sed -i "/${USER_NAME} ALL=(ALL) NOPASSWD: ALL/d" /etc/sudoers
 
 # -----------------------------------------------------------------------------
 # Node.js + Claude Code
@@ -91,6 +114,7 @@ RUN pacman -S --noconfirm --needed rustup sccache \
 
 USER ${USER_NAME}
 RUN rustup default stable \
+    && rustup toolchain install nightly --component rustfmt \
     && cargo install cargo-edit cargo-watch
 USER root
 
