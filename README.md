@@ -218,3 +218,13 @@ This is a **development tool**, not a security sandbox. The workspace mount is r
 # Custom user ID (match your host UID)
 docker build --build-arg USER_ID=$(id -u) -t c3po .
 ```
+
+## Future Enhancements
+
+### Network Restriction via Forward Proxy
+
+Running with `--dangerously-skip-permissions` means Claude can make arbitrary outgoing network requests — `curl` to external services, `npm publish`, `git push` to unknown remotes, etc. Container isolation protects the host filesystem but does nothing about data exfiltration over the network.
+
+The solution is a sidecar [tinyproxy](https://tinyproxy.github.io/) container that acts as a forward proxy with a domain whitelist. A `--restricted` flag on `c3po` would spin up the proxy alongside the main container, configure the container's network to route all HTTP/HTTPS traffic through it, and only allow connections to known-good domains (e.g. `api.anthropic.com`, `github.com`, `registry.npmjs.org`). All other outbound traffic would be blocked.
+
+This gives you the convenience of `--dangerously-skip-permissions` with a meaningful safety net against unintended or malicious network activity.
