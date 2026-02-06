@@ -113,28 +113,21 @@ RUN pacman -S --noconfirm --needed python uv \
 # -----------------------------------------------------------------------------
 # Rust + cargo tools
 # -----------------------------------------------------------------------------
-RUN pacman -S --noconfirm --needed rustup sccache \
+RUN pacman -S --noconfirm --needed rustup sccache cargo-edit cargo-watch \
     && pacman -Scc --noconfirm
 
 USER ${USER_NAME}
 RUN rustup default stable \
-    && rustup toolchain install nightly --component rustfmt \
-    && cargo install cargo-edit cargo-watch
+    && rustup toolchain install nightly --component rustfmt
 USER root
 
 # -----------------------------------------------------------------------------
 # Go
 # -----------------------------------------------------------------------------
-RUN pacman -S --noconfirm --needed go \
+RUN pacman -S --noconfirm --needed go golangci-lint delve \
     && pacman -Scc --noconfirm
 
 ENV GOPATH="/home/${USER_NAME}/go"
-
-USER ${USER_NAME}
-RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest \
-    && go install github.com/go-delve/delve/cmd/dlv@latest \
-    && go clean -cache -modcache
-USER root
 
 # -----------------------------------------------------------------------------
 # Claude config (defaults — host ~/.claude mount overlays at runtime)
