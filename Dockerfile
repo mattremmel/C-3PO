@@ -16,6 +16,10 @@ ARG USER_ID
 # Full system upgrade (required for Arch rolling release)
 RUN pacman -Syu --noconfirm && pacman -Scc --noconfirm
 
+# Generate UTF-8 locale
+RUN sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
+
 # -----------------------------------------------------------------------------
 # Core utilities
 # -----------------------------------------------------------------------------
@@ -196,5 +200,18 @@ WORKDIR /home/claude
 ENV PATH="/home/${USER_NAME}/.local/bin:/home/${USER_NAME}/.cargo/bin:/home/${USER_NAME}/go/bin:${PATH}"
 ENV EDITOR=nvim
 ENV VISUAL=nvim
+
+# Modern terminal & developer experience
+ENV COLORTERM=truecolor
+ENV TERM=xterm-256color
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LESS="-RFX"
+ENV MANPAGER="less -R"
+ENV GCC_COLORS="error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01"
+ENV FORCE_COLOR=1
+ENV CARGO_TERM_COLOR=always
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
