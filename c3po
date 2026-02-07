@@ -7,6 +7,8 @@ IMAGE="c3po"
 # --- Container naming ---
 # Deterministic name from workspace path so exec/stop/status can find it.
 WORKSPACE="$(pwd)"
+GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || GIT_ROOT=""
+MOUNT_ROOT="${GIT_ROOT:-$WORKSPACE}"
 WORKSPACE_HASH=$(printf '%s' "$WORKSPACE" | md5sum | cut -c1-8)
 WORKSPACE_NAME=$(basename "$WORKSPACE" | tr -c 'a-zA-Z0-9_.-' '-' | head -c 50)
 CONTAINER_NAME="c3po-${WORKSPACE_NAME}-${WORKSPACE_HASH}"
@@ -247,7 +249,7 @@ cmd_run() {
         --init
         --hostname c3po
         --name "$CONTAINER_NAME"
-        -v "$(pwd):$(pwd):rw"
+        -v "$MOUNT_ROOT:$MOUNT_ROOT:rw"
         -w "$(pwd)"
         -v "$HOME/.claude:/home/claude/.claude:rw"
         --cap-drop=ALL
