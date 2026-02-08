@@ -1,4 +1,4 @@
-# C3PO — Claude Code Container (Permissions Optional)
+# C-3PO — Claude Code Container (Permissions Optional)
 
 A containerized Arch Linux environment for running [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with `--dangerously-skip-permissions` — safely isolated from your host system.
 
