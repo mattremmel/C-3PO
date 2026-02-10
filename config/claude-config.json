@@ -1,6 +1,7 @@
 {
   "autoUpdates": false,
   "hasCompletedOnboarding": true,
+  "bypassPermissionsModeAccepted": true,
   "autoTrustNewProjects": true,
   "projects": {
     "/workspace": {
