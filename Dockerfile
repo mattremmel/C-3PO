@@ -18,43 +18,44 @@ RUN pacman -Syu --noconfirm && pacman -Scc --noconfirm
 
 # Generate UTF-8 locale
 RUN sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen
+  && locale-gen
 
 # -----------------------------------------------------------------------------
 # Core utilities
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed \
-    git \
-    curl \
-    wget \
-    openssh \
-    jq \
-    ripgrep \
-    fd \
-    bat \
-    just \
-    procs \
-    lazygit \
-    tree \
-    less \
-    man-db \
-    unzip \
-    zip \
-    shellcheck \
-    tmux \
-    htop \
-    strace \
-    github-cli \
-    difftastic \
-    hyperfine \
-    tokei \
-    dust \
-    bottom \
-    hexyl \
-    xh \
-    watchexec \
-    docker \
-    && pacman -Scc --noconfirm
+  git \
+  curl \
+  wget \
+  openssh \
+  jq \
+  ripgrep \
+  fd \
+  bat \
+  just \
+  procs \
+  lazygit \
+  tree \
+  less \
+  man-db \
+  unzip \
+  zip \
+  shellcheck \
+  tmux \
+  htop \
+  strace \
+  github-cli \
+  difftastic \
+  hyperfine \
+  tokei \
+  dust \
+  bottom \
+  hexyl \
+  xh \
+  watchexec \
+  docker \
+  docker-compose \
+  && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Non-root user
@@ -70,12 +71,12 @@ RUN echo "${USER_NAME} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER ${USER_NAME}
 RUN git clone --depth=1 https://aur.archlinux.org/yay-bin.git /tmp/yay-bin \
-    && cd /tmp/yay-bin \
-    && makepkg -si --noconfirm \
-    && rm -rf /tmp/yay-bin
+  && cd /tmp/yay-bin \
+  && makepkg -si --noconfirm \
+  && rm -rf /tmp/yay-bin
 
 RUN yay -S --noconfirm beads-bin \
-    && yay -Scc --noconfirm
+  && yay -Scc --noconfirm
 USER root
 
 RUN sed -i "/${USER_NAME} ALL=(ALL) NOPASSWD: ALL/d" /etc/sudoers
@@ -84,7 +85,7 @@ RUN sed -i "/${USER_NAME} ALL=(ALL) NOPASSWD: ALL/d" /etc/sudoers
 # Node.js
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed nodejs npm \
-    && pacman -Scc --noconfirm
+  && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Claude Code (native binary)
@@ -97,11 +98,11 @@ USER root
 # Neovim
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed neovim \
-    && pacman -Scc --noconfirm
+  && pacman -Scc --noconfirm
 
 ARG NVIM_CONFIG_REPO=https://github.com/mattremmel/config-nvim.git
 RUN git clone --depth=1 ${NVIM_CONFIG_REPO} /home/${USER_NAME}/.config/nvim \
-    && rm -rf /home/${USER_NAME}/.config/nvim/.git
+  && rm -rf /home/${USER_NAME}/.config/nvim/.git
 
 # Pre-install neovim plugins, treesitter parsers, and Mason tools at build time
 # so first launch is instant. Runs as the target user since plugin/data dirs
@@ -114,40 +115,40 @@ RUN nvim --headless "+TSUpdateSync" +qa
 # The MasonToolsInstallComplete event may fire before all async installs finish,
 # or one of the tools emits a non-zero exit. Needs root-cause investigation.
 RUN nvim --headless -c "autocmd User MasonToolsInstallComplete qall" -c "MasonInstallAll" \
-    || echo "WARNING: Mason tools install exited non-zero (known issue, tools may still be installed)"
+  || echo "WARNING: Mason tools install exited non-zero (known issue, tools may still be installed)"
 USER root
 
 # -----------------------------------------------------------------------------
 # Node.js extras
 # -----------------------------------------------------------------------------
 RUN npm install -g yarn pnpm typescript ts-node \
-    && npm cache clean --force
+  && npm cache clean --force
 
 # -----------------------------------------------------------------------------
 # Python + uv
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed python uv \
-    && pacman -Scc --noconfirm
+  && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Rust + cargo tools
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed rustup sccache cargo-edit cargo-watch \
-    && pacman -Scc --noconfirm
+  && pacman -Scc --noconfirm
 
 USER ${USER_NAME}
 RUN rustup default stable \
-    && rustup toolchain install nightly --component rustfmt \
-    && mkdir -p /home/${USER_NAME}/.cargo \
-    && printf '[build]\nrustflags = ["-C", "link-arg=-fuse-ld=mold"]\n' \
-       > /home/${USER_NAME}/.cargo/config.toml
+  && rustup toolchain install nightly --component rustfmt \
+  && mkdir -p /home/${USER_NAME}/.cargo \
+  && printf '[build]\nrustflags = ["-C", "link-arg=-fuse-ld=mold"]\n' \
+  > /home/${USER_NAME}/.cargo/config.toml
 USER root
 
 # -----------------------------------------------------------------------------
 # Go
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed go golangci-lint delve \
-    && pacman -Scc --noconfirm
+  && pacman -Scc --noconfirm
 
 ENV GOPATH="/home/${USER_NAME}/go"
 
@@ -155,14 +156,14 @@ ENV GOPATH="/home/${USER_NAME}/go"
 # C/C++ & LLVM toolchain
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed \
-    cmake \
-    clang \
-    llvm \
-    lldb \
-    lld \
-    gdb \
-    mold \
-    && pacman -Scc --noconfirm
+  cmake \
+  clang \
+  llvm \
+  lldb \
+  lld \
+  gdb \
+  mold \
+  && pacman -Scc --noconfirm
 
 # Default to mold for C/C++ builds (cmake, autotools, meson all honor LDFLAGS)
 ENV LDFLAGS="-fuse-ld=mold"
@@ -171,12 +172,12 @@ ENV LDFLAGS="-fuse-ld=mold"
 # Build dependencies & database libraries
 # -----------------------------------------------------------------------------
 RUN pacman -S --noconfirm --needed \
-    openssl \
-    pkgconf \
-    sqlite \
-    postgresql-libs \
-    protobuf \
-    && pacman -Scc --noconfirm
+  openssl \
+  pkgconf \
+  sqlite \
+  postgresql-libs \
+  protobuf \
+  && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Claude config (defaults — host ~/.claude mount overlays at runtime)
