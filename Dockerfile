@@ -55,6 +55,7 @@ RUN pacman -S --noconfirm --needed \
   watchexec \
   docker \
   docker-compose \
+  docker-buildx \
   && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
