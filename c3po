@@ -17,7 +17,7 @@ CONTAINER_NAME="c3po-${WORKSPACE_NAME}-${WORKSPACE_HASH}"
 show_help() {
     cat <<'EOF'
 Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
-       c3po exec [cmd...]               Run a command in the running container (default: bash)
+       c3po exec [cmd...]               Run a command in the running container (default: zsh)
        c3po attach [claude args...]     Resume Claude session in existing container
        c3po stop                        Stop and remove the container
        c3po status                      Show running c3po containers
@@ -28,7 +28,7 @@ Usage: c3po [flags] [claude args...]    Start Claude in a container (default)
 Flags:
   --help, -h      Show this help message
   --version       Show version
-  --shell         Start a bash shell instead of Claude (ephemeral)
+  --shell         Start a zsh shell instead of Claude (ephemeral)
   --ephemeral     Old behavior: container removed when Claude exits
   --no-resume     (attach) Start a fresh session instead of resuming
   --image <name>  Use a custom Docker image (default: c3po)
@@ -44,7 +44,7 @@ Examples:
   c3po -v /data:/data               Mount an additional volume
   c3po -- --memory=4g --cpus=2      Pass flags to docker run
   c3po -p "fix bug" -- --memory=4g  Combine c3po and docker flags
-  c3po exec                        Bash shell in the running container
+  c3po exec                        Zsh shell in the running container
   c3po exec nvim .                  Open neovim in the running container
   c3po attach                      Resume last Claude session in container
   c3po attach --no-resume           Start a fresh session instead
@@ -77,7 +77,7 @@ cmd_exec() {
         exit 1
     fi
     if [ $# -eq 0 ]; then
-        set -- bash
+        set -- zsh
     fi
     exec docker exec -it -w "$WORKSPACE" "$CONTAINER_NAME" "$@"
 }
@@ -281,7 +281,7 @@ cmd_run() {
         run_args+=("${env_args[@]}")
 
         if [ "$shell_mode" = 1 ]; then
-            run_args+=(--entrypoint /bin/bash)
+            run_args+=(--entrypoint /bin/zsh)
         fi
 
         run_args+=("$IMAGE")

@@ -57,12 +57,24 @@ RUN pacman -S --noconfirm --needed \
   docker-compose \
   docker-buildx \
   zsh \
+  starship \
   && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Non-root user
 # -----------------------------------------------------------------------------
 RUN useradd -m -s /bin/zsh -u ${USER_ID} ${USER_NAME}
+
+# -----------------------------------------------------------------------------
+# Oh My Zsh + plugins
+# -----------------------------------------------------------------------------
+USER ${USER_NAME}
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
+  && git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions \
+    /home/${USER_NAME}/.oh-my-zsh/custom/plugins/zsh-autosuggestions \
+  && git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting \
+    /home/${USER_NAME}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+USER root
 
 # -----------------------------------------------------------------------------
 # yay (AUR helper) + AUR packages
@@ -187,6 +199,7 @@ RUN pacman -S --noconfirm --needed \
 COPY config/claude-config.json /home/${USER_NAME}/.claude.json
 COPY config/settings.json /home/${USER_NAME}/.claude/settings.json
 COPY config/settings.local.json /home/${USER_NAME}/.config/c3po/settings.local.json
+COPY config/zshrc /home/${USER_NAME}/.zshrc
 
 # -----------------------------------------------------------------------------
 # Entrypoint
