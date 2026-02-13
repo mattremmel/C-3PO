@@ -56,12 +56,13 @@ RUN pacman -S --noconfirm --needed \
   docker \
   docker-compose \
   docker-buildx \
+  zsh \
   && pacman -Scc --noconfirm
 
 # -----------------------------------------------------------------------------
 # Non-root user
 # -----------------------------------------------------------------------------
-RUN useradd -m -s /bin/bash -u ${USER_ID} ${USER_NAME}
+RUN useradd -m -s /bin/zsh -u ${USER_ID} ${USER_NAME}
 
 # -----------------------------------------------------------------------------
 # yay (AUR helper) + AUR packages
